@@ -6,6 +6,7 @@ pip install -r requirements.txt
 ```
 
 ## Directory structure
+```
 IntriUAP
 |-- ILSVRC2012_val_00007942.JPEG
 |-- Intri_Attack
@@ -26,6 +27,7 @@ IntriUAP
 |   |-- vgg16
 |   `-- vgg19
 `-- requirement.txt
+```
 
 We have placed the singular values of the linear layers for each model in the corresponding model folder within the data directory.
 
