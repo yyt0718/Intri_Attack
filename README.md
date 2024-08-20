@@ -31,10 +31,10 @@ IntriUAP
 
 We have placed the singular values of the linear layers for each model in the corresponding model folder within the data directory.
 
-## data 
+## Data 
 The avgpix directory contains various initialization files, like range prior, gaussion noise, unifom noise.
 
-## demo
+## Demo
 We provided a demo, demo.ipynb, for creating IntriUAP with VGG19 model.
 
 ## Singular vectors
