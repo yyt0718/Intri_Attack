@@ -1,4 +1,4 @@
-# Toeplitz_Attack
+# IntriUAP
 ## Environment setup
 We recommend installing the required packages by running the command:
 ```sh
