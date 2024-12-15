@@ -1,5 +1,5 @@
 # IntriUAP
-(2024/12/15)
+*(2024/12/15)*
 This is the code for "AAAI25 Data-Free Universal Attack by Exploiting the Intrinsic Vulnerability of Deep Models". Supplementary materials and more detailed code will be gradually released in the future.
 
 ## Environment setup
