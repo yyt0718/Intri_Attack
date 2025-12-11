@@ -10,8 +10,8 @@ from scipy.sparse import csr_matrix, save_npz
 
 class Convlution_as_DBToeplitz:
 
-    def __init__(self,input_size,kernel,mode=None,padding=None,with_padding=True,return_sparse=False):
-
+    def __init__(self, input_size, kernel, stride=None, mode=None, padding=None, with_padding=True,
+                 return_sparse=False):
         self.image_size = input_size
         self.channels_out = kernel.shape[0]
         self.channels_in = kernel.shape[1]
@@ -20,19 +20,24 @@ class Convlution_as_DBToeplitz:
 
         self.mode = mode
         if mode is not None:
-            if self.kernel_size % 2 == 2:
-                raise ValueError("kernel size should be odd.")
+            if self.kernel_size % 2 == 0:
+                raise ValueError("Kernel size should be odd.")
             if mode == "valid":
                 self.padding = 0
             elif mode == "full":
-                self.padding = self.kernel_size -1
+                self.padding = self.kernel_size - 1
             elif mode == "same":
                 self.padding = (self.kernel_size - 1) // 2
         else:
-            self.padding = padding
+            self.padding = padding if padding is not None else 0
 
+        if stride is not None:
+            self.stride = stride
 
-        self.out_size = (self.image_size - self.kernel_size) + 2 * self.padding + 1
+        else:
+            self.stride = 1
+
+        self.out_size = ((self.image_size - self.kernel_size + 2 * self.padding) // self.stride) + 1
         self.with_padding = with_padding
         self.return_sparse = return_sparse
 
@@ -52,7 +57,7 @@ class Convlution_as_DBToeplitz:
 
     def padding_operator(self):
         total_size = (self.image_size + 2 * self.padding) * (self.image_size + 2 * self.padding)
-        # 稀疏矩阵
+        # 使用lil_matrix格式创建稀疏矩阵
         padding = lil_matrix((self.image_size * self.image_size, total_size))
         row_idx = 0
         for h in range(self.image_size + 2 * self.padding):
@@ -62,27 +67,30 @@ class Convlution_as_DBToeplitz:
                     padding[row_idx, col_idx] = 1
                     row_idx += 1
 
-        # lil_matrix to csr_matrix
+        # 将lil_matrix转换csr_matrix
         padding = padding.tocsr()
         padding = padding.transpose()
 
-        # kronecker
+        # 使用kronecker积创建块对角矩阵
         padding = kron(identity(self.channels_in, format='csr'), padding, format='csr')
 
         return padding
 
     def creat_W2(self):
-
-
+        # 初始化W2张量
         W2 = torch.zeros((self.channels_out * self.out_size * self.out_size), \
-                         (self.channels_in * (self.image_size + 2 * self.padding) * (self.image_size + 2 * self.padding)))
+                         (self.channels_in * (self.image_size + 2 * self.padding) * (
+                                     self.image_size + 2 * self.padding)))
 
+        row_idx = 0
         for self.h in range(self.channels_out):
             for self.i in range(self.out_size):
                 for self.j in range(self.out_size):
-                    row_idx = self.h * self.out_size * self.out_size + self.i * self.out_size + self.j
-                    embedded_filter = self.psi_inverse(self.kernel[self.h], self.i, self.j, self.image_size + 2 * self.padding, self.kernel_size)
+
+                    embedded_filter = self.psi_inverse(self.kernel[self.h], self.i * self.stride, self.j * self.stride,
+                                                       self.image_size + 2 * self.padding, self.kernel_size)
                     W2[row_idx, :] = self.phi(embedded_filter)
+                    row_idx += 1
 
         if self.padding != 0:
             padding = self.padding_operator()
@@ -97,7 +105,7 @@ class Convlution_as_DBToeplitz:
 
 
     def get_MAX_singular_vector(self):
-
+    #基于krylov子空间迭代法
         W2 = self.creat_W2()
         k = 1
         _, s, vt = svds(W2, k=k)
@@ -123,33 +131,60 @@ if __name__ == "__main__":
  model.eval()
  W = model.features[10].weight
  W = W.detach()
+ W = Convlution_as_DBToeplitz(13, W, padding=1,stride=1, return_sparse=True)
+ s,vt=W.get_MAX_singular_vector()
+ data_to_save = (s, vt)
+ print(s)
+ print(vt)
+ # filename = os.path.join('/home/yyt/Project1/data/alexnet/CONV10', f'CONV10_value_vec.pth')
+ # torch.save(data_to_save, filename)
+ #
 
 
- for i in range(512):
-     print(i)
-     # W22 = W[i].unsqueeze(0)
-     # W22 = Convlution_as_DBToeplitz(112, W22, mode='same',return_sparse=True)
-     # s,vt = W22.get_MAX_singular_vector()
-     # print(s,vt.shape)
-     # data_to_save = (s, vt)
-     # folder_name = 'CONV10'
-     # os.makedirs(folder_name, exist_ok=True)
-     # filename = os.path.join(folder_name, f'CONV10_value_vec_{i}.pth')
-     # torch.save(data_to_save, filename)
-     # del W22,s,vt, data_to_save
-     # gc.collect()
-     W22 = W[i].unsqueeze(0)
-     W22 = Convlution_as_DBToeplitz(56, W22, mode='same', return_sparse=True)
-     W222 = W22.creat_W2()
-     save_npz(f'/home/yyt/Project1/data/spares_of_conv10/sparse_matrix_{i}.npz', W222)
-     del W22,W222
-     gc.collect()
 
-# W22 = Convlution_as_DBToeplitz(224, W, mode='same',return_sparse=True)
-# s,vt = W22.get_MAX_singular_vector()
-# print(s,vt.shape)
-# data_to_save = (s, vt)
-# folder_name = '/home/yyt/Project1/data/vgg19/CONV34'
-# os.makedirs(folder_name, exist_ok=True)
-# filename = os.path.join(folder_name, f'CONV34_value_vec.pth')
-# torch.save(data_to_save, filename)
+
+
+
+
+
+
+
+
+
+
+
+ # for i in range(512):
+ #     print(i)
+ #     # W22 = W[i].unsqueeze(0)
+ #     # W22 = Convlution_as_DBToeplitz(112, W22, mode='same',return_sparse=True)
+ #     # s,vt = W22.get_MAX_singular_vector()
+ #     # print(s,vt.shape)
+ #     # data_to_save = (s, vt)
+ #     # folder_name = 'CONV10'
+ #     # os.makedirs(folder_name, exist_ok=True)
+ #     # filename = os.path.join(folder_name, f'CONV10_value_vec_{i}.pth')
+ #     # torch.save(data_to_save, filename)
+ #     # del W22,s,vt, data_to_save
+ #     # gc.collect()
+ #     W22 = W[i].unsqueeze(0)
+ #     W22 = Convlution_as_DBToeplitz(27, W22, padding=2,stride=1, return_sparse=True)
+ #     W222 = W22.creat_W2()
+ #     save_npz(f'/home/yyt/Project1/data/spares_of_conv3/sparse_matrix_{i}.npz', W222)
+ #     del W22,W222
+ #     gc.collect()
+ # #
+
+
+
+ # W1 = torch.randn((2, 2, 5, 5))
+ # X = torch.randn((1,17,17))
+ # X2 = X.repeat(2, 1, 1)
+ #
+ # W = Convlution_as_DBToeplitz(17, W1,padding=2,stride=4, return_sparse=False)
+ # W = W.creat_W2()
+ # print(W.shape)
+ # W = torch.tensor(W)
+ # Y = torch.matmul(W.to(float),X2.view(-1).to(float))
+ # print(Y.view(2,1,5,5))
+ # Y_conv2d = F.conv2d(X2.unsqueeze(0), W1, padding=2,stride=(4,4))
+ # print(Y_conv2d)
